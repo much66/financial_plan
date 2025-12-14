@@ -31,7 +31,7 @@
 
     <!-- Kode Aplikasi React -->
     <script type="text/babel">
-        const { useState, useMemo, useRef } = React;
+        const { useState, useMemo, useRef, useEffect } = React;
 
         // --- ICON COMPONENTS ---
         const IconWrapper = ({ children, size = 24, className = "" }) => (
@@ -49,6 +49,31 @@
         const Download = (props) => <IconWrapper {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconWrapper>;
         const Upload = (props) => <IconWrapper {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconWrapper>;
 
+        // --- HELPER FUNCTIONS BARU ---
+        
+        // 1. Format Currency (Ribuan pakai Titik) -> "1.000.000"
+        const formatCurrency = (num) => {
+            if (num === '' || num === null || num === undefined) return '';
+            let str = num.toString().replace(/\./g, '');
+            return str.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        };
+        const parseCurrency = (str) => {
+            if (!str) return "";
+            return str.toString().replace(/\./g, '');
+        };
+
+        // 2. Format Decimal (Desimal pakai Koma) -> "2,5"
+        const formatDecimal = (num) => {
+             if (num === '' || num === null || num === undefined) return '';
+             // Ganti titik (format JS) jadi koma (format Indo) untuk tampilan
+             return num.toString().replace('.', ',');
+        }
+        const parseDecimal = (str) => {
+             if(!str) return '';
+             // Ganti koma (input user) jadi titik (format JS) untuk kalkulasi
+             return str.toString().replace(',', '.');
+        }
+
         // --- SUB COMPONENTS ---
 
         const Section = ({ title, children }) => (
@@ -58,51 +83,139 @@
             </div>
         );
 
-        const Input = ({ label, name, val, onChange, suffix }) => (
-            <div className="flex justify-between items-center mb-2 last:mb-0">
-                <label className="text-xs text-gray-600 truncate mr-2 flex-1" title={label}>{label}</label>
-                <div className="flex items-center">
-                    <input 
-                        type="number" 
-                        name={name}
-                        value={val} 
-                        onChange={onChange}
-                        className="w-16 p-1 text-right text-xs border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none"
-                    />
-                    {suffix && <span className="text-[10px] text-gray-400 ml-1 w-3">{suffix}</span>}
-                </div>
-            </div>
-        );
+        // MODIFIKASI 1: Input Cerdas (Otomatis deteksi mode persen vs uang)
+        const Input = ({ label, name, val, onChange, suffix }) => {
+            const isPercentage = suffix === '%'; // Deteksi jika ini input persen
+            
+            // Local state untuk menyimpan apa yang diketik user sementara waktu
+            // Ini mencegah kursor lompat atau koma hilang saat mengetik "2,"
+            const [localVal, setLocalVal] = useState("");
+            const [isEditing, setIsEditing] = useState(false);
 
-        const OpexInput = ({ label, id, inputs, onChange }) => (
-            <div className="flex items-center justify-between mb-2">
-                <label className="text-xs text-gray-600 truncate flex-1 mr-1" title={label}>{label}</label>
-                <div className="flex gap-1">
-                    <div className="relative">
+            // Sync dari parent ke local saat tidak diedit
+            useEffect(() => {
+                if (!isEditing) {
+                    const formatted = isPercentage ? formatDecimal(val) : formatCurrency(val);
+                    setLocalVal(formatted);
+                }
+            }, [val, isEditing, isPercentage]);
+
+            const handleLocalChange = (e) => {
+                const v = e.target.value;
+                
+                // Regex Validasi
+                // Jika Persen: Boleh angka dan koma.
+                // Jika Uang: Boleh angka dan titik.
+                const regex = isPercentage ? /^[\d,]*$/ : /^[\d.]*$/;
+
+                if (regex.test(v)) {
+                    setLocalVal(v); // Update tampilan lokal (misal "2,")
+                    
+                    // Parse dan kirim ke parent untuk kalkulasi live
+                    const parsed = isPercentage ? parseDecimal(v) : parseCurrency(v);
+                    
+                    // Kirim ke parent (walaupun string "2.", parent akan parseFloat jadi 2)
+                    onChange({
+                        target: { name: name, value: parsed }
+                    });
+                }
+            };
+
+            return (
+                <div className="flex justify-between items-center mb-2 last:mb-0">
+                    <label className="text-xs text-gray-600 truncate mr-2 flex-1" title={label}>{label}</label>
+                    <div className="flex items-center">
                         <input 
-                            type="number" 
-                            name={`opex_${id}_fixed`}
-                            value={inputs[`opex_${id}_fixed`]} 
-                            onChange={onChange}
-                            className="w-14 p-1 text-right text-xs border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none"
-                            placeholder="Fix"
+                            type="text"
+                            inputMode={isPercentage ? "decimal" : "numeric"}
+                            value={localVal} 
+                            onChange={handleLocalChange}
+                            onFocus={() => setIsEditing(true)}
+                            onBlur={() => setIsEditing(false)}
+                            className={`p-1 text-right text-xs border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none ${isPercentage ? 'w-16' : 'w-24'}`}
+                            autoComplete="off"
                         />
-                        <span className="absolute right-0.5 top-0.5 text-[8px] text-gray-400">Rp</span>
-                    </div>
-                    <div className="relative">
-                        <input 
-                            type="number" 
-                            name={`opex_${id}_pct`}
-                            value={inputs[`opex_${id}_pct`]} 
-                            onChange={onChange}
-                            className="w-10 p-1 text-right text-xs border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none"
-                            placeholder="%"
-                        />
-                        <span className="absolute right-0.5 top-0.5 text-[8px] text-gray-400">%</span>
+                        {suffix && <span className="text-[10px] text-gray-400 ml-1 w-3">{suffix}</span>}
                     </div>
                 </div>
-            </div>
-        );
+            );
+        };
+
+        // MODIFIKASI 2: OpexInput dengan dukungan koma untuk %
+        const OpexInput = ({ label, id, inputs, onChange }) => {
+            const fixedName = `opex_${id}_fixed`;
+            const pctName = `opex_${id}_pct`;
+            
+            // --- Logic untuk Input FIX (Rupiah) ---
+            const [localFix, setLocalFix] = useState("");
+            const [editFix, setEditFix] = useState(false);
+            
+            useEffect(() => {
+                if(!editFix) setLocalFix(formatCurrency(inputs[fixedName]));
+            }, [inputs[fixedName], editFix]);
+
+            const changeFix = (e) => {
+                const v = e.target.value;
+                if (/^[\d.]*$/.test(v)) {
+                    setLocalFix(v);
+                    onChange({ target: { name: fixedName, value: parseCurrency(v) } });
+                }
+            };
+
+            // --- Logic untuk Input PCT (Persen) ---
+            const [localPct, setLocalPct] = useState("");
+            const [editPct, setEditPct] = useState(false);
+
+            useEffect(() => {
+                if(!editPct) setLocalPct(formatDecimal(inputs[pctName]));
+            }, [inputs[pctName], editPct]);
+
+            const changePct = (e) => {
+                const v = e.target.value;
+                // Izinkan angka dan koma
+                if (/^[\d,]*$/.test(v)) {
+                    setLocalPct(v);
+                    onChange({ target: { name: pctName, value: parseDecimal(v) } });
+                }
+            };
+
+            return (
+                <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs text-gray-600 truncate flex-1 mr-1" title={label}>{label}</label>
+                    <div className="flex gap-1">
+                        {/* Fixed Input (Rp) */}
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                value={localFix} 
+                                onChange={changeFix}
+                                onFocus={() => setEditFix(true)}
+                                onBlur={() => setEditFix(false)}
+                                className="w-24 p-1 pr-6 text-right text-xs border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none"
+                                placeholder="Fix"
+                                autoComplete="off"
+                            />
+                            <span className="absolute right-1.5 top-1 text-[10px] text-gray-400 pointer-events-none">Rp</span>
+                        </div>
+                        
+                        {/* Pct Input (%) - Support Koma */}
+                        <div className="relative">
+                            <input 
+                                type="text"
+                                inputMode="decimal"
+                                value={localPct} 
+                                onChange={changePct}
+                                onFocus={() => setEditPct(true)}
+                                onBlur={() => setEditPct(false)}
+                                className="w-12 p-1 pr-5 text-right text-xs border rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none"
+                                placeholder="%"
+                            />
+                            <span className="absolute right-1 top-1 text-[10px] text-gray-400 pointer-events-none">%</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
         const Card = ({ title, value, sub, color }) => (
             <div className={`p-4 rounded shadow-sm border ${color}`}>
@@ -173,20 +286,34 @@
                     const isNeg = displayVal < 0;
 
                     if (editable) {
-                    const isOverridden = overrides && overrides[m.month] !== undefined;
-                    return (
-                        <td key={i} className="p-1 text-right">
-                        <input 
-                            type="number"
-                            value={isOverridden ? overrides[m.month] : Math.round(val)} 
-                            onChange={(e) => onCellChange(m.month, e.target.value)}
-                            className={`
-                            w-full text-right p-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-emerald-500
-                            ${isOverridden ? 'bg-blue-50 border-blue-300 font-bold text-blue-700' : 'bg-transparent border-transparent hover:border-gray-300'}
-                            `}
-                        />
-                        </td>
-                    );
+                        // Logic edit manual di tabel (Gross Revenue)
+                        // Disini kita asumsikan Revenue adalah Ribuan (bukan desimal kecil), jadi pakai formatCurrency
+                        const isOverridden = overrides && overrides[m.month] !== undefined;
+                        const cellValue = isOverridden ? overrides[m.month] : Math.round(val);
+                        
+                        // Local state logic for table cell
+                        // Note: untuk simplifikasi di tabel, kita pakai controlled input biasa dengan formatCurrency
+                        // Jika user butuh koma di tabel revenue, logicnya harus sama dengan Input decimal
+                        // Tapi biasanya revenue bulat, jadi kita pakai formatCurrency
+                        
+                        return (
+                            <td key={i} className="p-1 text-right">
+                            <input 
+                                type="text"
+                                value={formatCurrency(cellValue)} 
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    if (/^[\d.]*$/.test(v)) {
+                                        onCellChange(m.month, parseCurrency(v));
+                                    }
+                                }}
+                                className={`
+                                w-full text-right p-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-emerald-500
+                                ${isOverridden ? 'bg-blue-50 border-blue-300 font-bold text-blue-700' : 'bg-transparent border-transparent hover:border-gray-300'}
+                                `}
+                            />
+                            </td>
+                        );
                     }
 
                     return (
@@ -234,6 +361,7 @@
                 opex_rnd_fixed: 5, opex_rnd_pct: 1,
 
                 // Financials
+                depreciationRate: 10, // Default 10% per tahun
                 taxRate: 22, 
                 annualInterestRate: 12, 
                 
@@ -254,7 +382,14 @@
 
             const handleChange = (e) => {
                 const { name, value } = e.target;
-                setInputs(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+                
+                // Value yang masuk sudah diparsing (titik/koma sudah dihandle komponen Input)
+                // Tapi mungkin masih string "2.5" atau "1000"
+                // Kita parse ke Float agar state tersimpan sebagai Angka Murni
+                
+                // Handle empty string agar jadi 0
+                const numValue = value === "" ? 0 : parseFloat(value);
+                setInputs(prev => ({ ...prev, [name]: isNaN(numValue) ? 0 : numValue }));
             };
 
             const handleRevenueChange = (month, val) => {
@@ -451,7 +586,8 @@
 
                 const totalOpex = opex_mkt + opex_content + opex_salary + opex_rent + opex_office + opex_repair + opex_rnd;
 
-                const depr = (inputs.startFixedAssets * 0.1) / 12; 
+                // Hitung Depresiasi berdasarkan input %
+                const depr = (inputs.startFixedAssets * (inputs.depreciationRate / 100)) / 12; 
                 
                 const ebit = grossProfit - totalOpex - depr;
                 const interest = (inputs.startDebt * (inputs.annualInterestRate/100)) / 12;
@@ -568,6 +704,7 @@
                         </Section>
 
                         <Section title="3. Financials & Taxes">
+                            <Input label="Depreciation Rate" name="depreciationRate" val={inputs.depreciationRate} onChange={handleChange} suffix="%"/>
                             <Input label="Finance Cost (p.a)" name="annualInterestRate" val={inputs.annualInterestRate} onChange={handleChange} suffix="%"/>
                             <Input label="Tax Rate" name="taxRate" val={inputs.taxRate} onChange={handleChange} suffix="%"/>
                         </Section>
