@@ -232,12 +232,14 @@
             </div>
         );
 
+        // MODIFIKASI: Text-center pada Header Bulan
         const TableHead = ({ data }) => (
             <thead className="bg-gray-100 text-gray-600">
                 <tr>
                 <th className="text-left p-3 min-w-[150px] sticky left-0 bg-gray-100 border-r border-gray-200 z-10">Item (Juta IDR)</th>
                 {data.map(m => (
-                    <th key={m.month} className="text-right p-3 font-medium min-w-[80px]">Bln {m.month}</th>
+                    // Diubah ke text-center dan menampilkan nama bulan (Januari, dst)
+                    <th key={m.month} className="text-center p-3 font-medium min-w-[80px]">{m.name}</th>
                 ))}
                 </tr>
             </thead>
@@ -289,11 +291,6 @@
                         // Disini kita asumsikan Revenue adalah Ribuan (bukan desimal kecil), jadi pakai formatCurrency
                         const isOverridden = overrides && overrides[m.month] !== undefined;
                         const cellValue = isOverridden ? overrides[m.month] : Math.round(val);
-                        
-                        // Local state logic for table cell
-                        // Note: untuk simplifikasi di tabel, kita pakai controlled input biasa dengan formatCurrency
-                        // Jika user butuh koma di tabel revenue, logicnya harus sama dengan Input decimal
-                        // Tapi biasanya revenue bulat, jadi kita pakai formatCurrency
                         
                         return (
                             <td key={i} className="p-1 text-right">
@@ -407,9 +404,9 @@
             const handleExport = () => {
                 const wb = XLSX.utils.book_new();
 
-                // Helper to create header row
-                const months = Array.from({length: 12}, (_, i) => `Bulan ${i+1}`);
-                const headerRow = ["Item", ...months];
+                // Helper to create header row (MODIFIKASI: Nama Bulan)
+                const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+                const headerRow = ["Item", ...monthNames];
 
                 // 1. Tab Income Statement
                 const incomeRows = [
@@ -540,6 +537,8 @@
             // --- 2. CALCULATION ENGINE ---
             const monthlyData = useMemo(() => {
                 let data = [];
+                // MODIFIKASI: Array nama bulan
+                const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
                 
                 let prev = {
                 rev: 0,
@@ -617,7 +616,7 @@
 
                 const monthObj = {
                     month: m,
-                    name: `Bulan ${m}`,
+                    name: monthNames[m-1], // Menggunakan nama bulan dari array
                     pl: { 
                         rev: grossRev, 
                         salesReturn, consignmentFee, platformFee, netRevenue,
